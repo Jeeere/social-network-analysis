@@ -3,6 +3,7 @@ Scrapes wanted vauva.fi threads
 """
 from datetime import datetime
 from sqlite3 import Connection
+import time
 from bs4 import BeautifulSoup
 import requests
 
@@ -41,7 +42,7 @@ def get_thread(url: str):
     total_dislikes = 0
 
     print("Getting thread from " + url)
-    request = requests.get(url, headers=HEADERS)
+    request = try_request(url=url)
     soup = BeautifulSoup(request.text, "lxml")
     soup = soup.find("div", attrs={"class":"region-main"})
 
@@ -131,7 +132,7 @@ def get_thread(url: str):
 
         # Get next page
         page += 1
-        request = requests.get(url + "?page=" + str(page))
+        request = try_request(url=url + "?page=" + str(page))
         soup = BeautifulSoup(request.text, "lxml")
         comment_section = soup.find("section", class_="comments comment-wrapper")
     
@@ -159,3 +160,23 @@ def get_rating(soup: BeautifulSoup):
         int(dislikes)
 
     return int(likes), int(dislikes)
+
+
+def try_request(url:str, headers:dict=HEADERS, s:int=15):
+    """
+    Attempts to perform a get request. On failure waits x seconds and tries again.\n
+    Arguments:
+        url: URL to be requested
+        headers: Headers for request
+        s: Seconds before retry
+    Returns:
+        Get request response
+    """
+    while True:
+        try:
+            request = requests.get(url, headers)
+            return request
+        except ConnectionResetError as e:
+            print(e + ", Trying again in " + str(s) + " seconds...")
+            time.sleep(s)
+        break

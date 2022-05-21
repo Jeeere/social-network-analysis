@@ -3,6 +3,7 @@ Searches vauva.fi for threads
 """
 from bs4 import BeautifulSoup
 import requests
+from scrape_threads import try_request
 
 HEADERS = {"user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/100.0.4896.127 Safari/537.36"}
 VAUVA = "https://www.vauva.fi"
@@ -16,14 +17,17 @@ def search(keywords: list, last_page:int=-1):
     Returns:
         List of unique thread URLs
     """
+    details = {}
     unique_urls = []
     for keyword in keywords:
-        urls = search_by_keyword(keyword, last_page)
+        urls, total = search_by_keyword(keyword, last_page)
         for url in urls:
             if url not in unique_urls:
                 unique_urls.append(url)
-        
-    return unique_urls
+        keyword_details = {keyword:{"total_urls":total,"total_matching_urls":len(urls),"unique_matching_urls":len(unique_urls)}}
+        details.update(keyword_details)
+
+    return unique_urls, details
 
 
 def search_by_keyword(keyword: str, last_page:int=-1):
@@ -36,8 +40,10 @@ def search_by_keyword(keyword: str, last_page:int=-1):
         List of found thread URLs
     """
     # TODO Threads missing from returned URLs (?)
+    total = 0
     min_replies = 10
     keyword_new = keyword.lower().replace(" ", "%20").replace("ä", "a").replace("ö", "o").replace("å", "a")
+
     if keyword != keyword_new:
         print("SEARCHING BY: " + keyword + " -> " + keyword_new)
     else:
@@ -46,9 +52,8 @@ def search_by_keyword(keyword: str, last_page:int=-1):
 
     page = 0
     while True:
-        print("Parsing page " + str(page))
         vauva_search = VAUVA + "/haku?page=" + str(page) + "&search_term=" + keyword_new
-        request = requests.get(vauva_search, headers=HEADERS)
+        request = try_request(url=vauva_search)
         soup = BeautifulSoup(request.text, "lxml")
         soup = soup.find("div", class_="region-main clearfix")
         # Find threads
@@ -57,12 +62,15 @@ def search_by_keyword(keyword: str, last_page:int=-1):
         try:
             threads[0]
         except IndexError as e:
-            print("Last page reached! " + str(page))
-            print("Total number of results: " + str(len(data)))
-            return data
+            print("Last page reached! " + str(page-1))
+            print("Total number of results with number of replies equal or more than " + str(min_replies) + ": " + str(len(data)))
+            return data, total
+
+        print("Parsing page " + str(page))
         
         # Loop over threads
         for thread in threads:
+            total += 1
             # Get number of replies
             try:
                 replies = int(thread.find("span", attrs={"class":"count"}).get_text())
@@ -83,6 +91,6 @@ def search_by_keyword(keyword: str, last_page:int=-1):
         if page == last_page:
             print("Given page reached!")
             print("Total number of results: " + str(len(data)))
-            return data
+            return data, total
         
         page += 1

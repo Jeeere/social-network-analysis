@@ -1,6 +1,7 @@
 import database as db
 import get_threads as gt
 import scrape_threads as st
+import timing
 
 KEYWORDS: dict = {
     "first_time_pregnancy": ["Ensimmäinen lapsi", "Ensimmäinen raskaus", "Ensikertalainen", "Äitiys", "Ensiraskaus Oireet", "Ensiraskaus", "Ensiraskaus vinkkejä", "Ensiraskaus mitä odottaa", "Eka raskaus", "ensiraskaus kokemus"],
@@ -16,12 +17,19 @@ def main():
     print("MAIN")
     conn = db.create_db("threads.db")
 
-    unique_urls = gt.search(KEYWORDS["first_time_pregnancy"])
-    # unique_urls = gt.search(["Ensimmäinen lapsi"], 0)
-    print("Number of unique threads collected: " + str(len(unique_urls)))
+    unique_urls, details = gt.search(KEYWORDS["first_time_pregnancy"])
+    # unique_urls, details = gt.search(["Ensimmäinen lapsi"], 0)
+    timing.log("Thread URLs collected")
+    log_search_details(details)
     st.get_threads(unique_urls, conn)
 
     db.close_connection(conn)
+    return
+
+
+def log_search_details(details):
+    with open("details.txt", "w+") as f:
+        f.write(str(details))
     return
 
 
