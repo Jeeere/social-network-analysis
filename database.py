@@ -13,12 +13,10 @@ def create_db_connection(db_path: str):
         Database connection
     """
     try:
-        conn = None
         conn: Connection = sqlite3.connect(db_path)
-    except:
-        print("ERROR: Error creating db connection!")
-    else:
         return conn
+    except:
+        print("ERROR: Error creating db connection!")  
 
 
 def create_db(db_path: str):
@@ -29,7 +27,6 @@ def create_db(db_path: str):
     Returns:
         Database connection
     """
-    conn = None
     try:
         conn: Connection = sqlite3.connect(db_path)
     except:
@@ -37,8 +34,10 @@ def create_db(db_path: str):
     else:
         cursor = conn.cursor()
 
+        # Delete existing table
         cursor.execute('DROP TABLE THREADS')
 
+        # SQL for creating new table
         sql ='''
             CREATE TABLE THREADS(
             URL TEXT PRIMARY KEY,
@@ -50,17 +49,9 @@ def create_db(db_path: str):
             ANALYZE BOOLEAN)
             '''
 
-        sql_thread = '''
-            CREATE TABLE IF THREAD(
-            URL TEXT PRIMARY KEY,
-            THREAD TEXT)
-            '''
-
         cursor.execute(sql)
-        # cursor.execute(sql_thread)
         conn.commit()
         cursor.close()
-
         return conn
 
 
@@ -74,7 +65,7 @@ def close_connection(conn: Connection):
     return
 
 
-def insert_thread(conn: Connection, data: dict, thread: dict):
+def insert_thread(conn: Connection, thread: dict):
     """
     Inserts thread metadata into db.\n
     Arguments:
@@ -91,9 +82,9 @@ def insert_thread(conn: Connection, data: dict, thread: dict):
         )'''
 
     cursor = conn.cursor()
-    cursor.execute(sql, (data["url"], data["category"], data["replies"], data["total_likes"], data["total_dislikes"], str(thread["thread"]), False))
+    cursor.execute(sql, (thread["url"], thread["category"], thread["replies"], thread["total_likes"], thread["total_dislikes"], str(thread["thread"]), False))
     conn.commit()
     cursor.close()
 
-    print("Metadata inserted to database")
+    print("Thread inserted to database")
     return cursor.lastrowid
