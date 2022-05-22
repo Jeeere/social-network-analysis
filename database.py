@@ -19,11 +19,12 @@ def create_db_connection(db_path: str):
         print("ERROR: Error creating db connection!")  
 
 
-def create_db(db_path: str):
+def create_db(db_path: str, reinit:bool=True):
     """
     Create a connection to an SQLite database and reinitialize it.\n
     Arguments:
         db_path: string describing path to wanted .db file
+        reinit: boolean describing if table should be reinitialized
     Returns:
         Database connection
     """
@@ -34,20 +35,32 @@ def create_db(db_path: str):
     else:
         cursor = conn.cursor()
 
-        # Delete existing table
-        cursor.execute('DROP TABLE THREADS')
-
-        # SQL for creating new table
-        sql ='''
-            CREATE TABLE THREADS(
-            URL TEXT PRIMARY KEY,
-            CATEGORY TEXT,
-            REPLIES INTEGER,
-            TOTAL_LIKES INTEGER,
-            TOTAL_DISLIKES INTEGER,
-            THREAD TEXT,
-            ANALYZE BOOLEAN)
-            '''
+        # SQL for creating table
+        if reinit:
+            # Delete existing table
+            cursor.execute('DROP TABLE THREADS')
+            
+            sql ='''
+                CREATE TABLE THREADS(
+                URL TEXT PRIMARY KEY,
+                CATEGORY TEXT,
+                REPLIES INTEGER,
+                TOTAL_LIKES INTEGER,
+                TOTAL_DISLIKES INTEGER,
+                THREAD TEXT,
+                ANALYZE BOOLEAN)
+                '''
+        else:
+            sql ='''
+                CREATE TABLE IF NOT EXISTS THREADS(
+                URL TEXT PRIMARY KEY,
+                CATEGORY TEXT,
+                REPLIES INTEGER,
+                TOTAL_LIKES INTEGER,
+                TOTAL_DISLIKES INTEGER,
+                THREAD TEXT,
+                ANALYZE BOOLEAN)
+                '''
 
         cursor.execute(sql)
         conn.commit()
@@ -82,9 +95,34 @@ def insert_thread(conn: Connection, thread: dict):
         )'''
 
     cursor = conn.cursor()
-    cursor.execute(sql, (thread["url"], thread["category"], thread["replies"], thread["total_likes"], thread["total_dislikes"], str(thread["thread"]), False))
-    conn.commit()
+    try:
+        cursor.execute(sql, (thread["url"], thread["category"], thread["replies"], thread["total_likes"], thread["total_dislikes"], str(thread["thread"]), False))
+        conn.commit()
+    except sqlite3.IntegrityError:
+        print("Thread already exists in database!")
     cursor.close()
 
     print("Thread inserted to database")
     return cursor.lastrowid
+
+
+def check_new(url:str, conn:Connection):
+    """
+    Check if given thread is new to the database.\n
+    Arguments:
+        url: URL to thread as string
+        conn: database connection
+    Returns:
+        True if thread not in database, 
+        False otherwise
+    """
+    cursor = conn.cursor()
+    sql='SELECT EXISTS (SELECT 1 FROM THREADS WHERE URL=?) LIMIT 1'
+    # Query returns 1 if url exists and 0 if not.
+    check=cursor.execute(sql,(url,)) 
+    if check.fetchone()[0]==0:
+        cursor.close()
+        return True
+    else:
+        cursor.close()
+        return False

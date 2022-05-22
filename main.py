@@ -15,21 +15,21 @@ KEYWORDS: dict = {
 
 def main():
     print("MAIN")
-    conn = db.create_db("threads.db")
+    conn = db.create_db("threads.db", reinit=False)
 
-    unique_urls, details = gt.search(KEYWORDS["first_time_pregnancy"])
+    unique_urls, details = gt.search(keywords=KEYWORDS["first_time_pregnancy"], conn=conn)
     # unique_urls, details = gt.search(["Ensimmäinen lapsi"], 0)
     timing.log("Thread URLs collected")
-    log_search_details(details)
+    log_search_details(details, st.TOTAL_REQUESTS)
     st.get_threads(unique_urls, conn)
-
+    print(st.TOTAL_REQUESTS)
     db.close_connection(conn)
     return
 
 
-def log_search_details(details):
+def log_search_details(details, total_requests:int):
     with open("details.txt", "w+") as f:
-        f.write(str(details))
+        f.write(str(total_requests) + str(details))
     return
 
 

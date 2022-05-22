@@ -2,13 +2,14 @@
 Searches vauva.fi for threads
 """
 from bs4 import BeautifulSoup
-import requests
 from scrape_threads import try_request
+import database as db
+from sqlite3 import Connection
 
 HEADERS = {"user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/100.0.4896.127 Safari/537.36"}
 VAUVA = "https://www.vauva.fi"
 
-def search(keywords: list, last_page:int=-1):
+def search(keywords: list, conn:Connection, last_page:int=-1):
     """
     Calls search_by_keyword() with every keyword in list.\n
     Arguments:
@@ -20,11 +21,15 @@ def search(keywords: list, last_page:int=-1):
     details = {}
     unique_urls = []
     for keyword in keywords:
+        unique_urls_kw = 0
         urls, total = search_by_keyword(keyword, last_page)
         for url in urls:
             if url not in unique_urls:
-                unique_urls.append(url)
-        keyword_details = {keyword:{"total_urls":total,"total_matching_urls":len(urls),"unique_matching_urls":len(unique_urls)}}
+                # Check if exists in database
+                if db.check_new(url, conn):
+                    unique_urls.append(url)
+                    unique_urls_kw += 1
+        keyword_details = {keyword:{"total_urls":total,"total_matching_urls":len(urls),"unique_matching_urls":unique_urls_kw}}
         details.update(keyword_details)
 
     return unique_urls, details

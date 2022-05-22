@@ -11,6 +11,7 @@ import database as db
 
 
 HEADERS = {"user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/100.0.4896.127 Safari/537.36"}
+TOTAL_REQUESTS = 0
 
 
 def get_threads(threads: list, conn: Connection):
@@ -69,7 +70,10 @@ def get_thread(url: str):
 
     # OP Post
     title = soup.find("div", attrs={"class":"field-item even", "property":"dc:title"}).get_text()
-    body = soup.find("div", attrs={"class":"field field-name-body field-type-text-with-summary field-label-hidden view-mode-full"}).get_text().strip()
+    try:
+        body = soup.find("div", attrs={"class":"field field-name-body field-type-text-with-summary field-label-hidden view-mode-full"}).get_text().strip()
+    except AttributeError:
+        body = ""
 
     # Comments section
     comment_section = soup.find("section", class_="comments comment-wrapper")
@@ -174,9 +178,10 @@ def try_request(url:str, headers:dict=HEADERS, s:int=15):
     """
     while True:
         try:
-            request = requests.get(url, headers)
+            request = requests.get(url, headers=headers)
+            global TOTAL_REQUESTS
+            TOTAL_REQUESTS += 1
             return request
-        except ConnectionResetError as e:
-            print(e + ", Trying again in " + str(s) + " seconds...")
+        except:
+            print("Trying again in " + str(s) + " seconds...")
             time.sleep(s)
-        break
