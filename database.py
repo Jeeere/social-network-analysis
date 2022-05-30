@@ -37,9 +37,12 @@ def create_db(db_path: str, reinit:bool=True):
 
         # SQL for creating table
         if reinit:
+            answer = input('Re-initializing table. Input "Q" to quit: ').lower().strip()
+            if answer == "q":
+                exit()
             # Delete existing table
             cursor.execute('DROP TABLE THREADS')
-            
+
             sql ='''
                 CREATE TABLE THREADS(
                 URL TEXT PRIMARY KEY,
@@ -104,6 +107,31 @@ def insert_thread(conn: Connection, thread: dict):
 
     print("Thread inserted to database")
     return cursor.lastrowid
+
+
+def get_threads(conn:Connection, sql:str):
+    """
+    Gets threads that meet conditions from database.\n
+    Arguments:
+        conn: SQLite database connection
+        sql: SQLite query as string
+    Returns:
+        List of threads
+    """
+    result = []
+    cursor = conn.cursor()
+
+    cursor.execute(sql)
+    threads = cursor.fetchall()
+
+    # for thread in threads:
+    #     for item in thread:
+    #         if type(item) == str:
+    #             item.replace(r"\xa0", " ").replace('"', r"\"").replace("'", '"')
+    #             result.append(item)
+    # print(threads)
+    # print(result)
+    return threads
 
 
 def check_new(url:str, conn:Connection):

@@ -54,7 +54,10 @@ def get_thread(url: str):
         try:
             username = soup.find("a", href=True, attrs={"title":"Näytä käyttäjäprofiili.", "class":"username"})["href"]
         except TypeError as a:
-            username = soup.find("div", attrs={"class":"user-name extra-field-author view-mode-full view-mode-full"}).get_text()
+            try:
+                username = soup.find("div", attrs={"class":"user-name extra-field-author view-mode-full view-mode-full"}).get_text()
+            except AttributeError:
+                username = ""
 
     # OP Timestamp
     time_date_string = soup.find("div", attrs={"class":"field field-name-post-date field-type-ds field-label-hidden view-mode-full"}).get_text().replace("klo ", "").replace("| ", "").strip()
@@ -63,15 +66,22 @@ def get_thread(url: str):
     category = soup.find("a", href=True, attrs={"class":"section-link"}).get_text()
 
     # OP Rating
-    rating = soup.find_all("div", class_="form-item form-type-item")[1]
-    likes, dislikes = get_rating(rating)
+    try:
+        rating = soup.find_all("div", class_="form-item form-type-item")[1]
+        likes, dislikes = get_rating(rating)
+    except IndexError:
+        likes, dislikes = 0, 0
     total_likes += likes
     total_dislikes += dislikes
 
     # OP Post
-    title = soup.find("div", attrs={"class":"field-item even", "property":"dc:title"}).get_text()
+    title = soup.find("div", attrs={"class":"field-item even", "property":"dc:title"}).get_text(strip=True)
+    # Remove quotes for later JSON decoding
+    title = title.replace("'", "").replace('"', '').replace(u"\xa0", " ")
     try:
-        body = soup.find("div", attrs={"class":"field field-name-body field-type-text-with-summary field-label-hidden view-mode-full"}).get_text().strip()
+        body = soup.find("div", attrs={"class":"field field-name-body field-type-text-with-summary field-label-hidden view-mode-full"}).get_text(strip=True).strip()
+        # Remove quotes for later JSON decoding
+        body = body.replace("'", "").replace('"', '').replace(u"\xa0", " ")
     except AttributeError:
         body = ""
 
@@ -81,7 +91,7 @@ def get_thread(url: str):
 
     # Initialize dict to be returned
     thread = {"url":url, "category":category, "replies":num_replies, "total_likes":0, "total_dislikes":0, "thread":{}}
-    thread["thread"].update({0: {"user":str(username), "timestamp":timestamp, "likes":likes, "dislikes":dislikes, "title":title, "text":body}})
+    thread["thread"].update({"0": {"user":str(username), "timestamp":timestamp, "likes":likes, "dislikes":dislikes, "title":title, "text":body}})
 
     # Handle comments section
     page = 0
@@ -121,11 +131,12 @@ def get_thread(url: str):
             com_time_date = datetime.strptime(com_time_date_string, r"%H:%M %d.%m.%Y")
             com_timestamp = datetime.timestamp(com_time_date)
 
-            com_text = comment.find("div", class_="field field-name-comment-body field-type-text-long field-label-hidden view-mode-full").get_text().strip()
+            com_text = comment.find("div", class_="field field-name-comment-body field-type-text-long field-label-hidden view-mode-full").get_text(strip=True).strip()
+            com_text = com_text.replace("'", "").replace('"', '').replace(u"\xa0", " ")
 
             # Add reply to thread
             com_likes, com_dislikes = int(com_likes), int(com_dislikes)
-            reply = {com_number: {"user":com_user, "timestamp":com_timestamp, "likes":com_likes, "dislikes":com_dislikes, "text":com_text}}
+            reply = {str(com_number): {"user":com_user, "timestamp":com_timestamp, "likes":com_likes, "dislikes":com_dislikes, "text":com_text}}
             thread["thread"].update(reply)
             total_likes += com_likes
             total_dislikes += com_dislikes

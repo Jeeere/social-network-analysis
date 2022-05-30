@@ -133,3 +133,5 @@ dmypy.json
 *.db
 /garbo
 details.txt
+backup.txt
+*.png
