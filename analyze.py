@@ -3,32 +3,82 @@ Analyzes collected threads
 """
 import json
 import matplotlib.pyplot as plt
-import os
+import networkx as nx
 
 import database as db
 from main import KEYWORDS
 import timing
 
 KEYWORDS = KEYWORDS
-"""
-KEYWORDS: dict = {
-    "first_time_pregnancy": ["Ensimmäinen lapsi", "Ensimmäinen raskaus", "Ensikertalainen", "Äitiys", "Ensiraskaus Oireet", "Ensiraskaus", "Ensiraskaus vinkkejä", "Ensiraskaus mitä odottaa", "Eka raskaus", "ensiraskaus kokemus"],
-    "parents_and_family": ["Isä", "Äiti", "Vanhemmat", "Vanhemmuus", "YH Äiti", "YH Isä", "Sukulaiset", "Isovanhemmat", "Isoäiti", "Isoisä", "Setä", "Eno", "Täti", "Kummi", "Parisuhde"],
-    "society": ["Yhteiskunta", "KELA", "Tuki", "Tuet", "Äitiysvapaa", "Vanhempainvapaa", "Lapsilisä"],
-    "health_issues": ["Terveys", "Sairaus", "Sairaudet", "Lääkkeet", "Lääkäri", "Sairaanhoito", "Sairaala", "Neuvola"],
-    "social_services": ["Sosiaalipalvelut", "Sosiaalituki", "Sossu", "KELA", "Neuvola", "Tuet", "Tuki"],
-    "finance_and_wealth": ["Raha", "Talous", "Palkka", "Äitiysraha", "Isyysraha", "Velka", "Laina", "Lasku"]
-}
-"""
 
 
 def main():
     threads = db.get_threads(conn, 'SELECT * FROM THREADS WHERE ANALYZE=1')
 
-    support = test_strength(threads)
+    timing.log("Start testing strength")
+    support, votes, shares = test_strength(threads)
+
+    timing.log("Start plotting figures")
     plot_strength(support)
-    
+    plot_strength(votes, "support")
+
+    timing.log("Start constructing social network graph")
+    construct_social_network_graph(threads, shares)
+
     return
+
+
+def construct_social_network_graph(threads:list, shares:dict):
+    """
+    Creates a social network graph and saves it.\n
+    Arguments:
+        threads: list of threads from database
+        shares: dictionary depicting which threads belong to which categories
+    """
+    print("Constructing social network graph...")
+    urls = [item[0] for item in threads]
+    G = nx.Graph()
+    G.add_nodes_from(urls)
+
+    edges = check_edges(urls, shares)
+
+    G.add_edges_from(edges)
+    print("Nodes: " + str(G.number_of_nodes()) + ", Edges: " + str(G.number_of_edges()))
+
+    plt.subplots(figsize=(50,50))
+    nx.draw_circular(G)
+
+    plt.savefig("figures/graph.png", dpi= "figure", format= "png", transparent= False, bbox_inches="tight")
+    plt.savefig("figures/graph_transparent.png", dpi= "figure", format= "png", transparent= True, bbox_inches="tight")
+
+    return
+
+def check_edges(all_threads:list, by_cat:dict, threshold:int=2):
+    """
+    Checks for possible edges between all nodes.\n
+    Arguments:
+        all_threads: list of all thread URLs
+        by_cat: dictionary depicting which threads belong to which categories
+        threshold: minimum number of categories in common for two nodes to make an edge
+    Returns:
+        edges: list of edges
+    """
+    print("Checking for edges...")
+    edges =[]
+    pairs = [(all_threads[i],all_threads[j]) for i in range(len(all_threads)) for j in range(i+1, len(all_threads))]
+
+    while len(pairs) > 0:
+        check, next = pairs.pop(0)
+        
+        share = 0
+        for category, threads in by_cat.items():
+            if(check in threads and next in threads):
+                share += 1
+            if share >= threshold:
+                edges.append((check, next))
+                break
+
+    return edges
 
 
 def test_strength(threads:list):
@@ -38,39 +88,68 @@ def test_strength(threads:list):
         threads: list of threads to be tested.
     """
     print("Testing strength...")
-    timing.log("Start testing strength")
-    support = {
+    
+    cat_strength = {
             "parents_and_family": 0,
             "society": 0,
             "health_issues": 0,
             "social_services": 0,
             "finance_and_wealth": 0
             }
+    cat_votes = {
+            "parents_and_family": 0,
+            "society": 0,
+            "health_issues": 0,
+            "social_services": 0,
+            "finance_and_wealth": 0
+            }
+    cat_threads = {
+            "parents_and_family": [],
+            "society": [],
+            "health_issues": [],
+            "social_services": [],
+            "finance_and_wealth": []
+            }
 
     for thread in threads:
-        thread = thread[5].replace("'", '"')
-        thread_json = json.loads(thread)
-
+        thread_json = json.loads(thread[5].replace("'", '"'))
+ 
         for reply_num, data in thread_json.items():
             # Test parents and family
-            support["parents_and_family"] = support["parents_and_family"] + test_category_support("parents_and_family", data)
+            cat_strength, cat_votes, cat_threads = thing("parents_and_family",cat_strength,cat_votes,cat_threads,data,thread)
             # Test society
-            support["society"] = support["society"] + test_category_support("society", data)
+            cat_strength, cat_votes, cat_threads = thing("society",cat_strength,cat_votes,cat_threads,data,thread)
             # Test health issues
-            support["health_issues"] = support["health_issues"] + test_category_support("health_issues", data)
+            cat_strength, cat_votes, cat_threads = thing("health_issues",cat_strength,cat_votes,cat_threads,data,thread)
             # Test social services
-            support["social_services"] = support["social_services"] + test_category_support("social_services", data)
+            cat_strength, cat_votes, cat_threads = thing("social_services",cat_strength,cat_votes,cat_threads,data,thread)
             # Test finance and wealth
-            support["finance_and_wealth"] = support["finance_and_wealth"] + test_category_support("finance_and_wealth", data)
-        
-    return support
+            cat_strength, cat_votes, cat_threads = thing("finance_and_wealth",cat_strength,cat_votes,cat_threads,data,thread)
+
+    return cat_strength, cat_votes, cat_threads
 
 
-def plot_strength(support):
+def thing(category:str, cat_strength:dict, cat_votes:dict, threads_by_cat:dict, data, thread):
+    """
+    
+    """
+    cat_support = test_category_support(category, data, thread)
+    if(cat_support > 0):
+        cat_votes[category] = cat_votes[category] + data["likes"] + data["dislikes"]
+    cat_strength[category] = cat_strength[category] + cat_support
+    
+
+    if(cat_support>0 and thread[0] not in threads_by_cat[category]):
+        threads_by_cat[category].append(thread[0])
+
+    return cat_strength, cat_votes, threads_by_cat
+
+
+def plot_strength(support, filename:str="strengths"):
     """
     Traces a bar plot showing the proportion of each category in the collected database.
     """
-    print("Plotting strengths...")
+    print("Plotting "+filename+"...")
     values = list(support.values())
     width = 0.3
 
@@ -78,13 +157,13 @@ def plot_strength(support):
     ax.bar(list(support.keys()), values, width)
     for i, v in enumerate(values):
         ax.text(i - .15, v + 1000, str(v))
-    plt.savefig("figures/strengths_transparent.png", dpi= "figure", format= "png", transparent= True)
-    plt.savefig("figures/strengths.png", dpi= "figure", format= "png", transparent= False)
+    plt.savefig("figures/" + filename + "_transparent.png", dpi= "figure", format= "png", transparent= True)
+    plt.savefig("figures/" + filename + ".png", dpi= "figure", format= "png", transparent= False)
 
     return
 
 
-def test_category_support(category:str, message:str):
+def test_category_support(category:str, message:str, thread):
     """
     
     """
@@ -94,8 +173,7 @@ def test_category_support(category:str, message:str):
         if keyword not in tested:
             support += message["text"].count(keyword)
             tested.append(keyword)
-            # if message["text"].count(keyword) > 0:
-            #     print(keyword + str(support))
+
     return support
 
 
