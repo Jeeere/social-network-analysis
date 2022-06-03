@@ -4,6 +4,7 @@ Analyzes collected threads
 import json
 import matplotlib.pyplot as plt
 import networkx as nx
+import numpy as np
 
 import database as db
 from main import KEYWORDS
@@ -23,7 +24,9 @@ def main():
     plot_strength(votes, "support")
 
     timing.log("Start constructing social network graph")
-    construct_social_network_graph(threads, shares)
+    G = construct_social_network_graph(threads, shares)
+    timing.log("Start getting graph attributes")
+    graph_attributes(G)
 
     return
 
@@ -41,9 +44,7 @@ def construct_social_network_graph(threads:list, shares:dict):
     G.add_nodes_from(urls)
 
     edges = check_edges(urls, shares)
-
     G.add_edges_from(edges)
-    print("Nodes: " + str(G.number_of_nodes()) + ", Edges: " + str(G.number_of_edges()))
 
     plt.subplots(figsize=(50,50))
     nx.draw_circular(G)
@@ -51,7 +52,46 @@ def construct_social_network_graph(threads:list, shares:dict):
     plt.savefig("figures/graph.png", dpi= "figure", format= "png", transparent= False, bbox_inches="tight")
     plt.savefig("figures/graph_transparent.png", dpi= "figure", format= "png", transparent= True, bbox_inches="tight")
 
+    return G
+
+
+def graph_attributes(G:nx.Graph):
+    # Connected components
+    Gcc = sorted(nx.connected_components(G), key=len, reverse=True)
+    # Giant component
+    G0 = G.subgraph(Gcc[0])
+
+    # Number of nodes
+    print("Nodes: ", G.number_of_nodes())
+    # Number of edges
+    print("Edges: ", G.number_of_edges())
+    # Overall clustering coefficient
+    print("Overall clustering coefficient: ", nx.average_clustering(G))
+    # Size of giant component
+    print("Giant component nodes: ", G.number_of_nodes())
+    # Number of edges
+    print("Giant component edges: ", G.number_of_edges())
+    # diameter
+    print("Diameter: ", nx.diameter(G0))
+    # average degree centrality and its associated variance
+    values = list(nx.degree_centrality(G).values())
+    print("average degree centrality: ", average(values),  ", it's associated variance: ", np.var(values))
+    # Average In-Betweeness centrality and its variance
+    values = list(nx.betweenness_centrality(G).values())
+    print("Average In-Betweeness centrality: ", average(values), ", its variance: ", np.var(values))
+    # TODO Average path length and its variance
+    # values = dict(nx.shortest_path_length(G0))
+    # values_list = [values[k] for k in values]
+    # print(values_list)
+    # print("Average path length: ", str(average(values_list)), ", it's variance: ", np.var(values_list))
+    print("Average path length: ", nx.average_shortest_path_length(G0))
+
     return
+
+
+def average(values:list):
+    return sum(values) / len(values)
+
 
 def check_edges(all_threads:list, by_cat:dict, threshold:int=2):
     """
