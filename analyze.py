@@ -5,86 +5,147 @@ import json
 import matplotlib.pyplot as plt
 import networkx as nx
 import numpy as np
+from cdlib import algorithms
+from cdlib import NodeClustering
+from sklearn import cluster
+import sys
+from networkx.algorithms import community
 
 import database as db
 from main import KEYWORDS
 import timing
 
 KEYWORDS = KEYWORDS
+np.set_printoptions(threshold=sys.maxsize)
 
 
 def main():
     threads = db.get_threads(conn, 'SELECT * FROM THREADS WHERE ANALYZE=1')
 
-    timing.log("Start testing strength")
     support, votes, shares = test_strength(threads)
 
-    timing.log("Start plotting figures")
-    plot_strength(support)
-    plot_strength(votes, "support")
+    # timing.log("Start plotting figures")
+    # plot_strength(support)
+    # plot_strength(votes, "support")
 
-    timing.log("Start constructing social network graph")
+    timing.log("Constructing graph with threshold=2")
     G = construct_social_network_graph(threads, shares)
-    timing.log("Start getting graph attributes")
+    # nx.write_gpickle(G,"garbo/pickled_graph")
     graph_attributes(G)
+    graph_spectral_clustering(G)
+
+    timing.log("Constructing graph with threshold=3")
+    G3 = construct_social_network_graph(threads, shares, 3)
+    graph_attributes(G3)
+    graph_spectral_clustering(G3,3)
+
+    timing.log("Constructing graph with threshold=4")
+    G4 = construct_social_network_graph(threads, shares, 4)
+    graph_attributes(G4)
+    graph_spectral_clustering(G4,4)
+    
+    timing.log("Constructing graph with threshold=5")
+    G5 = construct_social_network_graph(threads, shares, 5)
+    graph_attributes(G5)
+    graph_spectral_clustering(G5,5)
 
     return
 
 
-def construct_social_network_graph(threads:list, shares:dict):
+def graph_spectral_clustering(G:nx.Graph, th:int=2):
+    print("Entering community detection...")
+
+    coms = community.girvan_newman(G)
+    # coms = tuple(sorted(c) for c in next(comp))
+    print("    Communities detected! Quantifying quality...")
+    # Get coverage and performance
+    tx = ""
+    comstx = ""
+    comslens = ""
+    for com in coms:
+        cov_per = nx.algorithms.community.partition_quality(G, com)
+        tx += str(cov_per) + "\n"
+        comstx += str(com) + "\n"
+        comslens += str(len(com)) + "\n"
+    with open("figures/partition_quality" + str(th) + ".txt", "w") as f:
+        f.write(tx)
+    with open("figures/communities" + str(th) + ".txt", "w") as f:
+        f.write(str(comstx))
+    with open("figures/communities_lens" + str(th) + ".txt", "w") as f:
+        f.write(str(comslens))
+    return
+
+
+def construct_social_network_graph(threads:list, shares:dict, threshold:int=2):
     """
     Creates a social network graph and saves it.\n
     Arguments:
         threads: list of threads from database
         shares: dictionary depicting which threads belong to which categories
     """
-    print("Constructing social network graph...")
+    print("Constructing social network graph with threshold=" + str(threshold) + "...")
     urls = [item[0] for item in threads]
     G = nx.Graph()
     G.add_nodes_from(urls)
 
-    edges = check_edges(urls, shares)
+    edges = check_edges(urls, shares, threshold)
     G.add_edges_from(edges)
 
     plt.subplots(figsize=(50,50))
     nx.draw_circular(G)
 
-    plt.savefig("figures/graph.png", dpi= "figure", format= "png", transparent= False, bbox_inches="tight")
-    plt.savefig("figures/graph_transparent.png", dpi= "figure", format= "png", transparent= True, bbox_inches="tight")
+    plt.savefig("figures/graph" + str(threshold) + ".png", dpi="figure", format="png", transparent= False, bbox_inches="tight")
+    plt.savefig("figures/graph_transparent" + str(threshold) + ".png", dpi="figure", format="png", transparent= True, bbox_inches="tight")
 
     return G
 
 
 def graph_attributes(G:nx.Graph):
+    timing.log("Start getting graph attributes")
     # Connected components
     Gcc = sorted(nx.connected_components(G), key=len, reverse=True)
     # Giant component
     G0 = G.subgraph(Gcc[0])
 
     # Number of nodes
-    print("Nodes: ", G.number_of_nodes())
+    num_nodes = G.number_of_nodes()
+    print("Nodes: ", num_nodes)
+
     # Number of edges
-    print("Edges: ", G.number_of_edges())
+    num_edges = G.number_of_edges()
+    print("Edges: ", num_edges)
+
     # Overall clustering coefficient
-    print("Overall clustering coefficient: ", nx.average_clustering(G))
+    clustering_coefficient = nx.average_clustering(G)
+    print("Overall clustering coefficient: ", clustering_coefficient)
+
     # Size of giant component
-    print("Giant component nodes: ", G.number_of_nodes())
+    num_nodes_giant = G0.number_of_nodes()
+    print("Giant component nodes: ", num_nodes_giant)
+
     # Number of edges
-    print("Giant component edges: ", G.number_of_edges())
+    num_edges_giant = G0.number_of_edges()
+    print("Giant component edges: ", num_edges_giant)
+
     # diameter
-    print("Diameter: ", nx.diameter(G0))
+    diameter = nx.diameter(G0)
+    print("Diameter: ", diameter)
+
     # average degree centrality and its associated variance
     values = list(nx.degree_centrality(G).values())
-    print("average degree centrality: ", average(values),  ", it's associated variance: ", np.var(values))
+    avg_degree_centrality = average(values)
+    avg_degree_centrality_variance = np.var(values)
+    print("average degree centrality: ", avg_degree_centrality,  ", it's associated variance: ", avg_degree_centrality_variance)
+
     # Average In-Betweeness centrality and its variance
     values = list(nx.betweenness_centrality(G).values())
-    print("Average In-Betweeness centrality: ", average(values), ", its variance: ", np.var(values))
-    # TODO Average path length and its variance
-    # values = dict(nx.shortest_path_length(G0))
-    # values_list = [values[k] for k in values]
-    # print(values_list)
-    # print("Average path length: ", str(average(values_list)), ", it's variance: ", np.var(values_list))
-    print("Average path length: ", nx.average_shortest_path_length(G0))
+    avg_betweenness_centrality = average(values)
+    avg_betweenness_centrality_variance = np.var(values)
+    print("Average In-Betweeness centrality: ", avg_betweenness_centrality, ", its variance: ", avg_betweenness_centrality_variance)
+    
+    # Average path length
+    avg_path_length = nx.average_shortest_path_length(G0)
+    print("Average path length: ", avg_path_length)
 
     return
 
@@ -127,6 +188,7 @@ def test_strength(threads:list):
     Arguments:
         threads: list of threads to be tested.
     """
+    timing.log("Start testing strength")
     print("Testing strength...")
     
     cat_strength = {
@@ -174,6 +236,7 @@ def thing(category:str, cat_strength:dict, cat_votes:dict, threads_by_cat:dict, 
     
     """
     cat_support = test_category_support(category, data, thread)
+    
     if(cat_support > 0):
         cat_votes[category] = cat_votes[category] + data["likes"] + data["dislikes"]
     cat_strength[category] = cat_strength[category] + cat_support
