@@ -130,9 +130,7 @@ dmypy.json
 
 # Local files
 *.csv
-*.db
 /garbo
 /figures
-details.txt
-backup.txt
-*.png
+.png
+*.txt

@@ -101,7 +101,7 @@ def shit(url, title, post):
 if __name__ == "__main__":
     try:
         global conn
-        conn = db.create_db_connection("threads.db")
+        conn = db.create_db_connection("data/threads.db")
         main()
     except KeyboardInterrupt:
         print("\nQUITTING...")

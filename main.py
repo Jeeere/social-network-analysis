@@ -16,7 +16,7 @@ KEYWORDS: dict = {
 def main():
     print("MAIN")
     global conn
-    conn = db.create_db("threads.db", reinit=False)
+    conn = db.create_db("data/threads.db", reinit=False)
 
     unique_urls, details = gt.search(keywords=KEYWORDS["first_time_pregnancy"], conn=conn)
     # unique_urls, details = gt.search(["raskaus puudutus"], conn=conn, last_page=0)
